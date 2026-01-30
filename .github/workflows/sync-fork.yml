@@ -1,0 +1,51 @@
+name: Sync Fork from Upstream
+
+on:
+  # 1. 定时触发：每 4 小时检查一次
+  schedule:
+    - cron: '0 */4 * * *'
+  # 2. 手动触发
+  workflow_dispatch:
+
+permissions:
+  contents: write # 必须有写入权限才能推送代码
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Target Repo
+        uses: actions/checkout@v4
+        with:
+          # 必须设置为 0，否则 fetch 操作无法获取完整的历史记录
+          fetch-depth: 0 
+          token: ${{ github.token }}
+
+      - name: Sync Upstream
+        run: |
+          # 上游仓库的地址 (https格式)
+          UPSTREAM_URL="https://github.com/7Sageer/sublink-worker.git"
+          # 同步的分支名 (通常是 main 或 master)
+          BRANCH_NAME="main"
+
+          # 1. 配置 Git 用户信息
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+
+          # 2. 添加上游仓库源
+          git remote add upstream "$UPSTREAM_URL"
+
+          # 3. 拉取上游代码
+          echo "正在检查上游更新..."
+          git fetch upstream
+
+          # 4. 切换到对应分支
+          git checkout "$BRANCH_NAME"
+
+          # 5. 合并上游更改
+          # --no-edit 表示如果合并成功，自动使用默认的 commit 信息，不弹出编辑器
+          # || true 表示如果合并时出现“Already up to date”等非致命错误，不要报错停止
+          git merge upstream/"$BRANCH_NAME" --no-edit || true
+
+          # 6. 推送回你的 Fork 仓库
+          git push origin "$BRANCH_NAME"
