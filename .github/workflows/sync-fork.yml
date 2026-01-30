@@ -1,14 +1,12 @@
 name: Sync Fork from Upstream
 
 on:
-  # 1. 定时触发：每 4 小时检查一次
   schedule:
-    - cron: '0 */4 * * *'
-  # 2. 手动触发
+    - cron: '0 */4 * * *' # 每4小时
   workflow_dispatch:
 
 permissions:
-  contents: write # 必须有写入权限才能推送代码
+  contents: write
 
 jobs:
   sync:
@@ -17,35 +15,51 @@ jobs:
       - name: Checkout Target Repo
         uses: actions/checkout@v4
         with:
-          # 必须设置为 0，否则 fetch 操作无法获取完整的历史记录
           fetch-depth: 0 
           token: ${{ github.token }}
 
       - name: Sync Upstream
         run: |
-          # 上游仓库的地址 (https格式)
           UPSTREAM_URL="https://github.com/7Sageer/sublink-worker.git"
-          # 同步的分支名 (通常是 main 或 master)
           BRANCH_NAME="main"
 
-          # 1. 配置 Git 用户信息
           git config --global user.name 'GitHub Action'
           git config --global user.email 'action@github.com'
 
-          # 2. 添加上游仓库源
           git remote add upstream "$UPSTREAM_URL"
-
-          # 3. 拉取上游代码
-          echo "正在检查上游更新..."
           git fetch upstream
-
-          # 4. 切换到对应分支
           git checkout "$BRANCH_NAME"
-
-          # 5. 合并上游更改
-          # --no-edit 表示如果合并成功，自动使用默认的 commit 信息，不弹出编辑器
-          # || true 表示如果合并时出现“Already up to date”等非致命错误，不要报错停止
+          
+          # 合并上游代码
           git merge upstream/"$BRANCH_NAME" --no-edit || true
 
-          # 6. 推送回你的 Fork 仓库
-          git push origin "$BRANCH_NAME"
+      # --- 【新增步骤】清理不需要的 Action 文件 ---
+      - name: Remove Upstream Workflows
+        run: |
+          echo "正在清理上游的 workflow 文件..."
+          
+          # 逻辑：在 .github/workflows 目录下，
+          # 找到所有文件 (-type f)
+          # 排除掉 (! -name) 这个同步脚本本身 ('sync-fork.yml')
+          # 然后把剩下的全部删除 (-delete)
+          
+          find .github/workflows -type f ! -name 'sync-fork.yml' -delete
+          
+          # 检查一下结果，看看是不是只剩 sync-fork.yml 了
+          ls -R .github/workflows
+
+      # ------------------------------------------
+
+      - name: Push Changes
+        run: |
+          # 提交删除操作（如果有变动的话）
+          git add .github/workflows
+          
+          # 如果合并或删除产生了变动，才提交
+          if git diff --staged --quiet; then
+             echo "仓库已是最新，无变动。"
+          else
+             git commit -m "Merge upstream and remove external workflows"
+             git push origin "$BRANCH_NAME"
+             echo "同步完成。"
+          fi
