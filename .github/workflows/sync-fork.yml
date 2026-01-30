@@ -52,14 +52,13 @@ jobs:
 
       - name: Push Changes
         run: |
-          # 提交删除操作（如果有变动的话）
           git add .github/workflows
           
-          # 如果合并或删除产生了变动，才提交
           if git diff --staged --quiet; then
              echo "仓库已是最新，无变动。"
           else
              git commit -m "Merge upstream and remove external workflows"
-             git push origin "$BRANCH_NAME"
+             # 【推荐】直接推送当前分支，不需要变量
+             git push origin HEAD
              echo "同步完成。"
           fi
