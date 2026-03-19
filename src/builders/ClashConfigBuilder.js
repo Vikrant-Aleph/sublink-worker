@@ -1,5 +1,5 @@
 import yaml from 'js-yaml';
-import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS } from '../config/index.js';
+import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS, DIRECT_DEFAULT_RULES } from '../config/index.js';
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
 import { deepCopy, groupProxiesByCountry } from '../utils.js';
 import { addProxyWithDedup } from './helpers/proxyHelpers.js';
@@ -378,12 +378,22 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             if (outbound !== this.t('outboundNames.Node Select')) {
                 const name = this.t(`outboundNames.${outbound}`);
                 if (!this.hasProxyGroup(name)) {
-                    const proxies = this.buildSelectGroupMembers(proxyList);
-                    this.config['proxy-groups'].push({
+                    let proxies = this.buildSelectGroupMembers(proxyList);
+                    // For rules that should default to DIRECT, move DIRECT to the front
+                    if (DIRECT_DEFAULT_RULES.has(outbound)) {
+                        proxies = ['DIRECT', ...proxies.filter(p => p !== 'DIRECT')];
+                    }
+                    const group = {
                         type: "select",
                         name,
                         proxies
-                    });
+                    };
+                    // Add 'use' field if we have proxy-providers
+                    const providerNames = this.getAllProviderNames();
+                    if (providerNames.length > 0) {
+                        group.use = providerNames;
+                    }
+                    this.config['proxy-groups'].push(group);
                 }
             }
         });
@@ -395,11 +405,17 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 const name = this.t(`outboundNames.${rule.name}`);
                 if (!this.hasProxyGroup(name)) {
                     const proxies = this.buildSelectGroupMembers(proxyList);
-                    this.config['proxy-groups'].push({
+                    const group = {
                         type: "select",
                         name,
                         proxies
-                    });
+                    };
+                    // Add 'use' field if we have proxy-providers
+                    const providerNames = this.getAllProviderNames();
+                    if (providerNames.length > 0) {
+                        group.use = providerNames;
+                    }
+                    this.config['proxy-groups'].push(group);
                 }
             });
         }
@@ -409,11 +425,17 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const name = this.t('outboundNames.Fall Back');
         if (this.hasProxyGroup(name)) return;
         const proxies = this.buildSelectGroupMembers(proxyList);
-        this.config['proxy-groups'].push({
+        const group = {
             type: "select",
             name,
             proxies
-        });
+        };
+        // Add 'use' field if we have proxy-providers
+        const providerNames = this.getAllProviderNames();
+        if (providerNames.length > 0) {
+            group.use = providerNames;
+        }
+        this.config['proxy-groups'].push(group);
     }
 
     addCountryGroups() {
@@ -429,11 +451,17 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         if (manualGroupName) {
             const manualNorm = normalizeGroupName(manualGroupName);
             if (!existingNames.has(manualNorm)) {
-                this.config['proxy-groups'].push({
+                const group = {
                     name: manualGroupName,
                     type: 'select',
                     proxies: manualProxyNames
-                });
+                };
+                // Add 'use' field if we have proxy-providers
+                const providerNames = this.getAllProviderNames();
+                if (providerNames.length > 0) {
+                    group.use = providerNames;
+                }
+                this.config['proxy-groups'].push(group);
                 existingNames.add(manualNorm);
             }
         }
@@ -446,14 +474,20 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
             const groupName = `${emoji} ${name}`;
             const norm = normalizeGroupName(groupName);
             if (!existingNames.has(norm)) {
-                this.config['proxy-groups'].push({
+                const group = {
                     name: groupName,
                     type: 'url-test',
                     proxies: proxies,
                     url: 'https://www.gstatic.com/generate_204',
                     interval: 300,
                     lazy: false
-                });
+                };
+                // Add 'use' field if we have proxy-providers
+                const providerNames = this.getAllProviderNames();
+                if (providerNames.length > 0) {
+                    group.use = providerNames;
+                }
+                this.config['proxy-groups'].push(group);
                 existingNames.add(norm);
             }
             countryGroupNames.push(groupName);
